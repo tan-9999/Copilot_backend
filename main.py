@@ -1,7 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv
-from google import genai
+import google.generativeai as genai 
 from google.genai import types
 # Functions:
 from functions.get_file import schema_get_file
