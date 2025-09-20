@@ -13,106 +13,101 @@ def process_ai_request(prompt, working_directory, verbose_flag=False):
     """
     Modified main function to accept working_directory and return results
     """
-    load_dotenv()
-    api_key = os.environ.get("GEMINI_API_KEY")
-    genai.configure(api_key=api_key)
+    try:
+        load_dotenv()
+        api_key = os.environ.get("GEMINI_API_KEY")
+        genai.configure(api_key=api_key)
 
-    system_prompt = """
-            You are a helpful AI coding agent.
+        system_prompt = """
+                You are a helpful AI coding agent.
 
-            When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
+                When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
 
-            - List files and directories
-            - Read file contents
-            - Execute Python files with optional arguments
+                - List files and directories
+                - Read file contents
+                - Execute Python files with optional arguments
 
-            Note:
-            -All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
-            -When returning code, show code well formatted
-        """
-    
-    # Create model with tools
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
-        system_instruction=system_prompt,
-        tools=[schema_get_file, schema_read_file, schema_execute_file]
-    )
-    
-    max_iters = 20
-    function_calls_made = []
-    chat_history = [{"role": "user", "parts": [prompt]}]
-    
-    for i in range(max_iters):
-        try:
-            response = model.generate_content(chat_history)
-            
-            if response is None:
-                return {"error": "Response is malformed"}
-            
-            # Get token info if available
-            token_info = {}
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                token_info = {
-                    'prompt_tokens': response.usage_metadata.prompt_token_count,
-                    'response_tokens': response.usage_metadata.candidates_token_count
-                }
-            
-            if verbose_flag and token_info:
-                print(f"User prompt: {prompt}")
-                print(f"Prompt token: {token_info.get('prompt_tokens', 0)}")
-                print(f"Response token: {token_info.get('response_tokens', 0)}")
-            
-            # Check for function calls
-            has_function_calls = False
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'function_call') and part.function_call:
-                        has_function_calls = True
-                        function_call = part.function_call
-                        
-                        # Track function calls for frontend
-                        function_calls_made.append({
-                            'name': function_call.name,
-                            'args': dict(function_call.args) if function_call.args else {}
-                        })
-                        
-                        # Execute function
-                        result = call_function(function_call, working_directory, verbose_flag)
-                        
-                        # Add function result to chat history
-                        chat_history.append({
-                            "role": "model", 
-                            "parts": [part]
-                        })
-                        chat_history.append({
-                            "role": "function",
-                            "parts": [{
-                                "function_response": {
-                                    "name": function_call.name,
-                                    "response": {"result": result}
-                                }
-                            }]
-                        })
-            
-            if not has_function_calls:
-                # Final response
-                return {
-                    "success": True,
-                    "finalResponse": response.text,
-                    "tokenCounts": token_info if verbose_flag else None,
-                    "totalIterations": i + 1,
-                    "functionCalls": function_calls_made,
-                    "workingDirectory": working_directory
-                }
+                Note:
+                -All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
+                -When returning code, show code well formatted
+            """
+        
+        # Create model with tools
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-pro",
+            system_instruction=system_prompt,
+            tools=[schema_get_file, schema_read_file, schema_execute_file]
+        )
+        
+        max_iters = 20
+        function_calls_made = []
+        
+        for i in range(max_iters):
+            try:
+                print(f"Iteration {i+1}: Sending prompt to model")
                 
-        except Exception as e:
-            return {"error": f"Error in iteration {i}: {str(e)}"}
-    
-    return {
-        "error": "Maximum iterations reached",
-        "functionCalls": function_calls_made,
-        "totalIterations": max_iters
-    }
+                response = model.generate_content(prompt)
+                
+                print(f"Response received, checking for function calls...")
+                
+                if not response.candidates:
+                    return {"error": "No response candidates received"}
+                
+                # Check for function calls in the response
+                has_function_calls = False
+                
+                for candidate in response.candidates:
+                    if not candidate.content or not candidate.content.parts:
+                        continue
+                        
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'function_call') and part.function_call:
+                            has_function_calls = True
+                            function_call = part.function_call
+                            
+                            print(f"Function call detected: {function_call.name}")
+                            
+                            # Track function calls for frontend
+                            function_calls_made.append({
+                                'name': function_call.name,
+                                'args': dict(function_call.args) if function_call.args else {}
+                            })
+                            
+                            # Execute function with working_directory
+                            result = call_function(function_call, working_directory, verbose_flag)
+                            print(f"Function result: {result}")
+                            
+                            # Create new chat with function result
+                            prompt = f"Previous function call {function_call.name} returned: {result}\nPlease continue with the original request."
+                
+                # If no function calls, this is the final response
+                if not has_function_calls:
+                    print("No function calls detected, returning final response")
+                    return {
+                        "success": True,
+                        "finalResponse": response.text if response.text else "No response text",
+                        "tokenCounts": {
+                            'prompt_tokens': response.usage_metadata.prompt_token_count if hasattr(response, 'usage_metadata') and response.usage_metadata else 0,
+                            'response_tokens': response.usage_metadata.candidates_token_count if hasattr(response, 'usage_metadata') and response.usage_metadata else 0
+                        } if verbose_flag else None,
+                        "totalIterations": i + 1,
+                        "functionCalls": function_calls_made,
+                        "workingDirectory": working_directory
+                    }
+                    
+            except Exception as e:
+                print(f"Error in iteration {i}: {e}")
+                return {"error": f"Error in iteration {i}: {str(e)}"}
+        
+        return {
+            "error": "Maximum iterations reached",
+            "functionCalls": function_calls_made,
+            "totalIterations": max_iters
+        }
+        
+    except Exception as e:
+        print(f"Error in process_ai_request: {e}")
+        return {"error": f"Error in process_ai_request: {str(e)}"}
 
 def main():
     # Original command line interface (for backwards compatibility)

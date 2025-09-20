@@ -1,16 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
+import traceback  # Add this import
 from main import process_ai_request
 
 app = Flask(__name__)
-# CORS(app, origins=["http://localhost:3000"])
-CORS(app, origins=[
-    "http://localhost:3000",      # Create React App default
-    "http://localhost:5173",      # Vite default (your current port)
-    "http://127.0.0.1:5173",      # Alternative localhost
-    "http://127.0.0.1:3000"       # Alternative localhost
-])
+CORS(app, origins=["http://localhost:3000", "http://localhost:5173"])
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -24,6 +19,11 @@ def chat():
         working_directory = data.get('working_directory', 'D:\\Hackathon\\calculator')
         verbose = data.get('verbose', False)
         
+        print(f"Received request:")  # Debug print
+        print(f"  Prompt: {prompt}")
+        print(f"  Working Directory: {working_directory}")
+        print(f"  Verbose: {verbose}")
+        
         if not prompt:
             return jsonify({"error": "Prompt is required"}), 400
             
@@ -32,9 +32,9 @@ def chat():
                 "error": f"Working directory does not exist: {working_directory}"
             }), 400
         
-        print(f"Processing: {prompt[:50]}... in {working_directory}")
-        
+        # Process the request
         result = process_ai_request(prompt, working_directory, verbose)
+        print(f"Result: {result}")  # Debug print
         
         if result.get("success"):
             return jsonify(result), 200
@@ -42,7 +42,12 @@ def chat():
             return jsonify(result), 500
             
     except Exception as e:
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        print(f"Exception in chat endpoint: {e}")  # Debug print
+        print(f"Traceback: {traceback.format_exc()}")  # Full traceback
+        return jsonify({
+            "success": False,
+            "error": f"Server error: {str(e)}"
+        }), 500
 
 @app.route('/api/validate-directory', methods=['POST'])
 def validate_directory():
