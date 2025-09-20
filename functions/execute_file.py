@@ -61,6 +61,9 @@
 #         },
 #     ),
 # )
+
+
+
 import os
 import subprocess
 from pathlib import Path
@@ -160,30 +163,35 @@ def execute_file(
         out += f"\nProcess exited with code {proc.returncode}"
     return out
 
+
 # ────────────────────────────────────────────────────────────────
-# Standard schema format (compatible with google-generativeai)
+# OPTIONAL: schema object (if you still expose this via genai)
 # ────────────────────────────────────────────────────────────────
-schema_execute_file = {
-    "name": "execute_file",
-    "description": (
-        "Runs a Python, JavaScript, C++ or Java file located inside the "
-        "working directory. Accepts additional CLI args as an optional array."
-    ),
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "file_path": {
-                "type": "string",
-                "description": "File to run (relative to the working directory).",
+try:
+    from google.genai import types  # only if the SDK is present
+
+    schema_execute_file = types.FunctionDeclaration(
+        name="execute_file",
+        description=(
+            "Runs a Python, JavaScript, C++ or Java file located inside the "
+            "working directory. Accepts additional CLI args as an optional array."
+        ),
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "file_path": types.Schema(
+                    type=types.Type.STRING,
+                    description="File to run (relative to the working directory).",
+                ),
+                "args": types.Schema(
+                    type=types.Type.ARRAY,
+                    description="Optional list of CLI arguments.",
+                    items=types.Schema(type=types.Type.STRING),
+                ),
             },
-            "args": {
-                "type": "array",
-                "description": "Optional list of CLI arguments.",
-                "items": {
-                    "type": "string"
-                },
-            },
-        },
-        "required": ["file_path"],
-    },
-}
+        ),
+    )
+
+except ModuleNotFoundError:
+    # Skip schema creation when google-genai is not available
+    pass
