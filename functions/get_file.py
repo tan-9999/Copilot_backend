@@ -1,5 +1,4 @@
 import os
-from google.genai import types
 
 # working_directory = r'D:\Hackathon\calculator'
 
@@ -18,19 +17,18 @@ def get_file(working_directory, directory="."):
         size = os.path.getsize(content_path)
         final_responce += f"- {content}: file_size={size} bytes, is_dir={is_dir} \n"
     return final_responce
-    
-# get_file(working_directory)
 
-schema_get_file = types.FunctionDeclaration(
-    name="get_file",
-    description="Lists files in the specified directory along with their sizes, constrained to the working directory.",
-    parameters=types.Schema(
-        type=types.Type.OBJECT,
-        properties={
-            "directory": types.Schema(
-                type=types.Type.STRING,
-                description="The directory to list files from, relative to the working directory. If not provided, lists files in the working directory itself.",
-            ),
+# Convert schema to standard dictionary format
+schema_get_file = {
+    "name": "get_file",
+    "description": "Lists files in the specified directory along with their sizes, constrained to the working directory.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "directory": {
+                "type": "string",
+                "description": "The directory to list files from, relative to the working directory. If not provided, lists files in the working directory itself.",
+            },
         },
-    ),
-)
+    },
+}
