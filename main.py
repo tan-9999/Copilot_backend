@@ -9,23 +9,43 @@ from functions.read_file import schema_read_file
 from functions.execute_file import schema_execute_file
 # Func. call
 from call_function import call_function
+# Git support
+from git_manager import GitManager
+
 
 def process_ai_request(prompt, working_directory, verbose_flag=False):
     """
     Modified main function to accept working_directory and return results
     """
+    # Git repository support
+    git_manager = GitManager()
+    original_directory = working_directory
+    repo_info = None
+    
+    if git_manager.is_valid_git_url(working_directory):
+        print(f"Git URL detected: {working_directory}")
+        local_path, error = git_manager.clone_or_update_repo(working_directory)
+        if error:
+            return {"error": f"Git operation failed: {error}"}
+        working_directory = local_path
+        repo_info = git_manager.get_repo_info(local_path)
+    
     load_dotenv()
     api_key = os.environ.get("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
 
+
     system_prompt = """
             You are a helpful AI coding agent.
 
+
             When a user asks a question or makes a request, make a function call plan. You can perform the following operations:
+
 
             - List files and directories
             - Read file contents
             - Execute Python files with optional arguments
+
 
             Note:
             -All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
@@ -46,6 +66,7 @@ def process_ai_request(prompt, working_directory, verbose_flag=False):
             schema_execute_file,
         ] 
     )
+
 
     config=types.GenerateContentConfig(
         tools=[available_functions], 
@@ -101,7 +122,8 @@ def process_ai_request(prompt, working_directory, verbose_flag=False):
                 "tokenCounts": token_info if verbose_flag else None,
                 "totalIterations": i + 1,
                 "functionCalls": function_calls_made,
-                "workingDirectory": working_directory
+                "workingDirectory": original_directory,
+                "repositoryInfo": repo_info
             }
     
     return {
@@ -109,6 +131,7 @@ def process_ai_request(prompt, working_directory, verbose_flag=False):
         "functionCalls": function_calls_made,
         "totalIterations": max_iters
     }
+
 
 def main():
     # Original command line interface (for backwards compatibility)
@@ -132,6 +155,7 @@ def main():
         print(result["finalResponse"])
     else:
         print(f"Error: {result.get('error', 'Unknown error')}")
+
 
 if __name__ == "__main__":
     main()
