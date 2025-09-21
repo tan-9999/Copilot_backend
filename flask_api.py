@@ -7,7 +7,7 @@ from git_manager import GitManager  # Add Git support
 
 
 app = Flask(__name__)
-CORS(app, origins=["https://copilot-frontend-gules.vercel.app", "http://localhost:5173"])
+CORS(app, origins=["https://copilot-frontend-gules.vercel.app"])
 
 
 @app.route('/api/health', methods=['GET'])
